@@ -1,0 +1,35 @@
+{
+  "name": "customer-support",
+  "description": "Customer support bot for order tracking",
+  "idle_session_ttl": 300,
+  "locales": {
+    "en_GB": {
+      "description": "British English locale",
+      "confidence_threshold": 0.4,
+
+      "slot_types": {
+        "OrderNumberType": {
+          "values": ["12345", "67890"]
+        }
+      },
+
+      "intents": {
+        "TrackOrderIntent": {
+          "description": "Track customer order status",
+          "sample_utterances": [
+            "Track order {OrderNumber}",
+            "Where is my order {OrderNumber}"
+          ],
+          "slots": {
+            "OrderNumber": {
+              "description": "Customer order number",
+              "slot_type": "OrderNumberType",
+              "required": true,
+              "prompt": "Please provide your order number."
+            }
+          }
+        }
+      }
+    }
+  }
+}

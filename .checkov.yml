@@ -1,0 +1,41 @@
+# Checkov configuration for Lex Platform
+# https://www.checkov.io/2.Basics/Suppressing%20and%20Skipping%20Policies.html
+
+# Skip checks that are not applicable to Lex resources
+skip-check:
+  - CKV_AWS_117  # Lambda function not configured with DLQ
+  - CKV_AWS_173  # Lambda function not configured with code signing
+
+# Soft fail mode - report issues but don't fail the build
+soft-fail: false
+
+# Framework to scan
+framework:
+  - terraform
+
+# Output format
+output:
+  - cli
+  - sarif
+
+# Directories to scan
+directory:
+  - modules/
+  - environments/
+
+# Exclude directories
+exclude-paths:
+  - .terraform/
+  - .git/
+
+# Enable specific checks
+enable-check:
+  - CKV_AWS_1    # IAM policy should not have full "*:*" administrative privileges
+  - CKV_AWS_40   # IAM policies should not have full "*:*" administrative privileges
+  - CKV_AWS_61   # IAM role should have MFA enabled
+  - CKV_AWS_111  # IAM policy should not have write access without constraints
+  - CKV2_AWS_5   # Security group should not allow ingress from 0.0.0.0/0 to port 22
+  - CKV2_AWS_6   # Security group should not allow ingress from 0.0.0.0/0 to port 3389
+
+# Severity threshold (LOW, MEDIUM, HIGH, CRITICAL)
+check-severity: MEDIUM
