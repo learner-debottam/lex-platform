@@ -1,9 +1,9 @@
-# terraform {
-#   backend "s3" {
-#     bucket         = "company-terraform-state"
-#     key            = "lex/dev/terraform.tfstate"
-#     region         = "eu-west-2"
-#     dynamodb_table = "terraform-locks"
-#     encrypt        = true
-#   }
-# }
+terraform {
+  backend "s3" {
+    bucket         = "lex-platform-tfstate"
+    key            = "lex/dev/terraform.tfstate"
+    region         = "eu-west-2"
+    dynamodb_table = "lex-platform-tfstate-lock"
+    encrypt        = true
+  }
+}
