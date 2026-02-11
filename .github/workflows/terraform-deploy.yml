@@ -36,8 +36,9 @@ jobs:
       - name: Run Checkov
         continue-on-error: true
         run: |
-          checkov -d . --framework terraform \
-            --output sarif \
+          checkov -d . \
+            --framework terraform \
+            -o sarif \
             --output-file-path . \
             --skip-check CKV_AWS_117,CKV_AWS_173
 
