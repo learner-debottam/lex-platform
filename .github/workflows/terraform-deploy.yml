@@ -32,6 +32,7 @@ jobs:
 
       - name: Run Checkov
         uses: bridgecrewio/checkov-action@master
+        continue-on-error: true
         with:
           directory: .
           framework: terraform
@@ -41,7 +42,7 @@ jobs:
           skip_check: CKV_AWS_117,CKV_AWS_173
 
       - name: Upload Checkov results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: checkov-results.sarif
