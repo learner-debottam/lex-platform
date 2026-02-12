@@ -9,15 +9,10 @@ on:
       - 'bots/**'
       - '.github/workflows/**'
 
+  # ✅ Push to main ALWAYS triggers (no path filtering)
   push:
     branches: [ main ]
-    paths:
-      - 'modules/**'
-      - 'environments/**'
-      - 'bots/**'
-      - '.github/workflows/**'
 
-  # Manual trigger with debug toggle
   workflow_dispatch:
     inputs:
       debug:
@@ -135,7 +130,7 @@ jobs:
           - env: prod
             role: AWS_ROLE_PROD
 
-    # 👇 Triggers GitHub manual approval gate
+    # 🔐 Manual approval required (configure in repo settings)
     environment:
       name: ${{ matrix.env }}
 
