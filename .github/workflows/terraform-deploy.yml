@@ -9,7 +9,6 @@ on:
       - 'bots/**'
       - '.github/workflows/**'
 
-  # ✅ Push to main ALWAYS triggers (no path filtering)
   push:
     branches: [ main ]
 
@@ -27,16 +26,15 @@ env:
   TF_IN_AUTOMATION: true
   TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
 
-# Global concurrency control (per branch)
 concurrency:
   group: terraform-${{ github.ref }}
   cancel-in-progress: true
 
-jobs:
-
 # ---------------------------------------------------
 # 1️⃣ Security Scan
 # ---------------------------------------------------
+
+jobs:
 
   security-scan:
     name: Terraform Security Scan
@@ -47,20 +45,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Checkov
-        run: pip install checkov
-
-      - name: Run Checkov
-        run: |
+      - run: pip install checkov
+      - run: |
           checkov -d . \
             --framework terraform \
             --soft-fail \
             -o sarif \
             --output-file-path results.sarif
-
-      - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@v4
+      - uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: results.sarif
 
@@ -79,98 +71,143 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_DEV }}
           aws-region: ${{ env.AWS_REGION }}
-
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Terraform Init
-        working-directory: environments/dev
-        run: terraform init -upgrade 2> terraform-debug.log
-
-      - name: Terraform Validate
-        working-directory: environments/dev
-        run: terraform validate 2>> terraform-debug.log
-
-      - name: Terraform Plan
-        working-directory: environments/dev
-        run: terraform plan -no-color 2>> terraform-debug.log
-
-      - name: Upload Debug Logs (if enabled or failed)
-        if: failure() || github.event.inputs.debug == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: terraform-debug-pr
-          path: environments/dev/terraform-debug.log
+      - working-directory: environments/dev
+        run: terraform init -upgrade
+      - working-directory: environments/dev
+        run: terraform plan -no-color
 
 # ---------------------------------------------------
-# 3️⃣ Manual Approval Deployments
+# 3️⃣ DEV DEPLOY
 # ---------------------------------------------------
 
-  terraform-deploy:
-    name: Deploy ${{ matrix.env }}
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+  deploy-dev:
+    name: Deploy DEV
+    if: github.event_name != 'pull_request'
     needs: security-scan
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        include:
-          - env: dev
-            role: AWS_ROLE_DEV
-          - env: test
-            role: AWS_ROLE_TEST
-          - env: sit
-            role: AWS_ROLE_SIT
-          - env: prod
-            role: AWS_ROLE_PROD
-
-    # 🔐 Manual approval required (configure in repo settings)
-    environment:
-      name: ${{ matrix.env }}
-
-    # Prevent parallel apply per environment
+    environment: dev
     concurrency:
-      group: terraform-${{ matrix.env }}
+      group: terraform-dev
       cancel-in-progress: false
-
     permissions:
       id-token: write
       contents: read
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets[matrix.role] }}
+          role-to-assume: ${{ secrets.AWS_ROLE_DEV }}
           aws-region: ${{ env.AWS_REGION }}
-
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+      - working-directory: environments/dev
+        run: terraform init -upgrade
+      - working-directory: environments/dev
+        run: terraform plan -out=tfplan
+      - working-directory: environments/dev
+        run: terraform apply tfplan
 
-      - name: Terraform Init
-        working-directory: environments/${{ matrix.env }}
-        run: terraform init -upgrade 2> terraform-debug.log
+# ---------------------------------------------------
+# 4️⃣ TEST DEPLOY (waits for DEV)
+# ---------------------------------------------------
 
-      - name: Terraform Plan
-        working-directory: environments/${{ matrix.env }}
-        run: terraform plan -out=tfplan 2>> terraform-debug.log
+  deploy-test:
+    name: Deploy TEST
+    needs: deploy-dev
+    runs-on: ubuntu-latest
+    environment: test
+    concurrency:
+      group: terraform-test
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      contents: read
 
-      - name: Terraform Apply
-        working-directory: environments/${{ matrix.env }}
-        run: terraform apply tfplan 2>> terraform-debug.log
-
-      - name: Upload Debug Logs (if enabled or failed)
-        if: failure() || github.event.inputs.debug == 'true'
-        uses: actions/upload-artifact@v4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
-          name: terraform-debug-${{ matrix.env }}
-          path: environments/${{ matrix.env }}/terraform-debug.log
+          role-to-assume: ${{ secrets.AWS_ROLE_TEST }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - working-directory: environments/test
+        run: terraform init -upgrade
+      - working-directory: environments/test
+        run: terraform plan -out=tfplan
+      - working-directory: environments/test
+        run: terraform apply tfplan
+
+# ---------------------------------------------------
+# 5️⃣ SIT DEPLOY (waits for TEST)
+# ---------------------------------------------------
+
+  deploy-sit:
+    name: Deploy SIT
+    needs: deploy-test
+    runs-on: ubuntu-latest
+    environment: sit
+    concurrency:
+      group: terraform-sit
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_SIT }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - working-directory: environments/sit
+        run: terraform init -upgrade
+      - working-directory: environments/sit
+        run: terraform plan -out=tfplan
+      - working-directory: environments/sit
+        run: terraform apply tfplan
+
+# ---------------------------------------------------
+# 6️⃣ PROD DEPLOY (waits for SIT)
+# ---------------------------------------------------
+
+  deploy-prod:
+    name: Deploy PROD
+    needs: deploy-sit
+    runs-on: ubuntu-latest
+    environment: prod
+    concurrency:
+      group: terraform-prod
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_PROD }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - working-directory: environments/prod
+        run: terraform init -upgrade
+      - working-directory: environments/prod
+        run: terraform plan -out=tfplan
+      - working-directory: environments/prod
+        run: terraform apply tfplan
