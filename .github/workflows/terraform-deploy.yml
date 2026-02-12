@@ -41,7 +41,7 @@ jobs:
           checkov -d . \
             --framework terraform \
             -o sarif \
-            --output-file-path . \
+            --output-file-path console,results.sarif \
             --skip-check CKV_AWS_117,CKV_AWS_173
 
       - name: Upload Checkov results
