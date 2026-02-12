@@ -1,3 +1,10 @@
+# ============================================================================
+# Intents
+# ============================================================================
+# Creates all intents defined in the bot configuration across all locales.
+# Each intent represents a user goal (e.g., BookTable, TrackOrder).
+# Intent IDs are sanitized to meet Lex naming requirements (max 10 chars).
+
 resource "aws_lexv2models_intent" "intents" {
   for_each = {
     for intent in local.intents :
@@ -20,7 +27,12 @@ resource "aws_lexv2models_intent" "intents" {
   ]
 }
 
-
+# ============================================================================
+# Slot Types (Custom)
+# ============================================================================
+# Creates custom slot types (e.g., MealType, ProductCategory) for each locale.
+# Slot types define the valid values that can fill a slot in an intent.
+# Built-in Amazon slot types (AMAZON.Date, AMAZON.Time) don't need to be created.
 
 resource "aws_lexv2models_slot_type" "slot_types" {
   for_each = {
@@ -52,6 +64,14 @@ resource "aws_lexv2models_slot_type" "slot_types" {
   ]
 }
 
+# ============================================================================
+# Slots
+# ============================================================================
+# Creates slots for each intent. Slots are the information pieces the bot
+# needs to collect (e.g., date, time, party size).
+# - Required slots will prompt the user until a value is provided
+# - Optional slots can be skipped
+# - Supports both custom and Amazon built-in slot types
 
 resource "aws_lexv2models_slot" "slots" {
   for_each = {
@@ -166,4 +186,3 @@ resource "aws_lexv2models_slot" "slots" {
     aws_lexv2models_slot_type.slot_types
   ]
 }
-

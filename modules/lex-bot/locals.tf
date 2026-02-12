@@ -1,3 +1,15 @@
+# ============================================================================
+# Local Variables - Data Transformation
+# ============================================================================
+# Transforms the JSON bot configuration into flattened data structures that
+# Terraform can iterate over to create Lex resources.
+#
+# Key transformations:
+# - Bot name: Appends environment suffix (e.g., restaurant-bot-dev)
+# - Slot types: Flattens nested locale/slot_type structure
+# - Intents: Sanitizes intent names to meet Lex ID requirements (max 10 chars)
+# - Slots: Combines intent and slot data with proper type references
+
 locals {
   bot_name = "${var.bot_config.name}-${var.environment}"
 
