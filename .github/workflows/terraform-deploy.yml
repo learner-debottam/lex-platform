@@ -79,14 +79,20 @@ jobs:
 
       - name: Terraform Init
         working-directory: ./environments/${{ matrix.environment }}
+        env:
+          TF_LOG: ${{ runner.debug == '1' && 'DEBUG' || '' }}
         run: terraform init
 
       - name: Terraform Validate
         working-directory: ./environments/${{ matrix.environment }}
+        env:
+          TF_LOG: ${{ runner.debug == '1' && 'DEBUG' || '' }}
         run: terraform validate
 
       - name: Terraform Plan
         working-directory: ./environments/${{ matrix.environment }}
+        env:
+          TF_LOG: ${{ runner.debug == '1' && 'DEBUG' || '' }}
         run: terraform plan -out=tfplan
 
       - name: Upload plan
@@ -123,6 +129,8 @@ jobs:
 
       - name: Terraform Init
         working-directory: ./environments/dev
+        env:
+          TF_LOG: ${{ runner.debug == '1' && 'DEBUG' || '' }}
         run: terraform init
 
       - name: Download plan
@@ -133,6 +141,8 @@ jobs:
 
       - name: Terraform Apply
         working-directory: ./environments/dev
+        env:
+          TF_LOG: ${{ runner.debug == '1' && 'DEBUG' || '' }}
         run: terraform apply -auto-approve tfplan
 
   terraform-apply-test:
@@ -162,6 +172,8 @@ jobs:
 
       - name: Terraform Init
         working-directory: ./environments/test
+        env:
+          TF_LOG: ${{ runner.debug == '1' && 'DEBUG' || '' }}
         run: terraform init
 
       - name: Download plan
@@ -172,6 +184,8 @@ jobs:
 
       - name: Terraform Apply
         working-directory: ./environments/test
+        env:
+          TF_LOG: ${{ runner.debug == '1' && 'DEBUG' || '' }}
         run: terraform apply -auto-approve tfplan
 
   terraform-apply-sit:
@@ -201,6 +215,8 @@ jobs:
 
       - name: Terraform Init
         working-directory: ./environments/sit
+        env:
+          TF_LOG: ${{ runner.debug == '1' && 'DEBUG' || '' }}
         run: terraform init
 
       - name: Download plan
@@ -211,6 +227,8 @@ jobs:
 
       - name: Terraform Apply
         working-directory: ./environments/sit
+        env:
+          TF_LOG: ${{ runner.debug == '1' && 'DEBUG' || '' }}
         run: terraform apply -auto-approve tfplan
 
   terraform-apply-prod:
@@ -240,6 +258,8 @@ jobs:
 
       - name: Terraform Init
         working-directory: ./environments/prod
+        env:
+          TF_LOG: ${{ runner.debug == '1' && 'DEBUG' || '' }}
         run: terraform init
 
       - name: Download plan
@@ -250,4 +270,6 @@ jobs:
 
       - name: Terraform Apply
         working-directory: ./environments/prod
+        env:
+          TF_LOG: ${{ runner.debug == '1' && 'DEBUG' || '' }}
         run: terraform apply -auto-approve tfplan
