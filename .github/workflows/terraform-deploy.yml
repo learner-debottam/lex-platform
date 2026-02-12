@@ -147,7 +147,7 @@ jobs:
 
   terraform-apply-test:
     name: Deploy to TEST
-    needs: terraform-plan
+    needs: terraform-apply-dev
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: test
@@ -190,7 +190,7 @@ jobs:
 
   terraform-apply-sit:
     name: Deploy to SIT
-    needs: terraform-plan
+    needs: terraform-apply-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: sit
@@ -233,7 +233,7 @@ jobs:
 
   terraform-apply-prod:
     name: Deploy to PROD
-    needs: terraform-plan
+    needs: terraform-apply-sit
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: prod
