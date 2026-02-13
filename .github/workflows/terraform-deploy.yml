@@ -67,7 +67,7 @@ jobs:
     name: Deploy DEV
     needs: tflint
     runs-on: ubuntu-latest
-    environment: dev   # <-- triggers manual approval
+    environment: dev
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
@@ -78,7 +78,7 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      # --- Infra ---
+      # Infra
       - name: Terraform Init Infra
         working-directory: infra
         env:
@@ -95,7 +95,7 @@ jobs:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
         run: terraform apply -auto-approve tfplan
 
-      # --- Lex Bot Module ---
+      # Lex Bot Module
       - name: Terraform Init Lex Bot
         working-directory: modules/lex-bot
         env:
@@ -113,7 +113,7 @@ jobs:
         run: terraform apply -auto-approve tfplan
 
 # ---------------------------------------------------
-# 4️⃣ Deploy TEST (after DEV)
+# 4️⃣ Deploy TEST
 # ---------------------------------------------------
   deploy-test:
     name: Deploy TEST
@@ -130,7 +130,7 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      # --- Infra ---
+      # Infra
       - name: Terraform Init Infra
         working-directory: infra
         env:
@@ -147,7 +147,7 @@ jobs:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
         run: terraform apply -auto-approve tfplan
 
-      # --- Lex Bot Module ---
+      # Lex Bot Module
       - name: Terraform Init Lex Bot
         working-directory: modules/lex-bot
         env:
@@ -165,7 +165,7 @@ jobs:
         run: terraform apply -auto-approve tfplan
 
 # ---------------------------------------------------
-# 5️⃣ Deploy SIT (after TEST)
+# 5️⃣ Deploy SIT
 # ---------------------------------------------------
   deploy-sit:
     name: Deploy SIT
@@ -182,7 +182,7 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      # --- Infra ---
+      # Infra
       - name: Terraform Init Infra
         working-directory: infra
         env:
@@ -199,7 +199,7 @@ jobs:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
         run: terraform apply -auto-approve tfplan
 
-      # --- Lex Bot Module ---
+      # Lex Bot Module
       - name: Terraform Init Lex Bot
         working-directory: modules/lex-bot
         env:
@@ -217,7 +217,7 @@ jobs:
         run: terraform apply -auto-approve tfplan
 
 # ---------------------------------------------------
-# 6️⃣ Deploy PROD (after SIT)
+# 6️⃣ Deploy PROD
 # ---------------------------------------------------
   deploy-prod:
     name: Deploy PROD
@@ -234,7 +234,7 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      # --- Infra ---
+      # Infra
       - name: Terraform Init Infra
         working-directory: infra
         env:
@@ -251,7 +251,7 @@ jobs:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
         run: terraform apply -auto-approve tfplan
 
-      # --- Lex Bot Module ---
+      # Lex Bot Module
       - name: Terraform Init Lex Bot
         working-directory: modules/lex-bot
         env:
