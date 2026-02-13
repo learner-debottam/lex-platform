@@ -81,12 +81,12 @@ jobs:
         working-directory: infra
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform init -upgrade -backend-config="state/dev.config"
+        run: terraform init -upgrade -backend-config="/infra/state/dev.config"
       - name: Terraform Plan Infra
         working-directory: infra
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform plan -var-file=vars/dev.tfvars -out=tfplan
+        run: terraform plan -var-file=/infra/vars/dev.tfvars -out=tfplan
       - name: Terraform Apply Infra
         working-directory: infra
         env:
@@ -96,12 +96,12 @@ jobs:
         working-directory: modules/lex-bot
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform init -upgrade -backend-config="state/dev.config"
+        run: terraform init -upgrade -backend-config="/infra/state/dev.config"
       - name: Terraform Plan Lex Bot
         working-directory: modules/lex-bot
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform plan -var-file=vars/dev.tfvars -out=tfplan
+        run: terraform plan -var-file=/infra/vars/dev.tfvars -out=tfplan
       - name: Terraform Apply Lex Bot
         working-directory: modules/lex-bot
         env:
@@ -129,12 +129,12 @@ jobs:
         working-directory: infra
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform init -upgrade -backend-config="state/test.config"
+        run: terraform init -upgrade -backend-config="/infra/state/test.config"
       - name: Terraform Plan Infra
         working-directory: infra
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform plan -var-file=vars/test.tfvars -out=tfplan
+        run: terraform plan -var-file=/infra/vars/test.tfvars -out=tfplan
       - name: Terraform Apply Infra
         working-directory: infra
         env:
@@ -144,12 +144,12 @@ jobs:
         working-directory: modules/lex-bot
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform init -upgrade -backend-config="state/test.config"
+        run: terraform init -upgrade -backend-config="/infra/state/test.config"
       - name: Terraform Plan Lex Bot
         working-directory: modules/lex-bot
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform plan -var-file=vars/test.tfvars -out=tfplan
+        run: terraform plan -var-file=/infra/vars/test.tfvars -out=tfplan
       - name: Terraform Apply Lex Bot
         working-directory: modules/lex-bot
         env:
