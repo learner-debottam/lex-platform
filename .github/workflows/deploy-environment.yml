@@ -1,0 +1,43 @@
+name: Deploy Environment
+
+on:
+    workflow_call:
+        inputs:
+            environment-to-deply:
+                required: true
+                type: string
+
+jobs:
+    build-lint-test:
+        runs-on:
+            - ubuntu-latest
+            - buildspec-override:true
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@v6
+            - uses: terraform-linters/setup-tflint@v6
+              with:
+                tflint_version: v0.59.1
+            - run: tflint --init
+              env:
+                GITHUB_TOKEN: ${{ github.token }}
+            - run: >
+                tflint
+                --chdir=./infra
+                --format compact
+                --config ${{ github.workspace}}/.tflint.hcl
+                --var-file ${{ github.workspace }}/infra/vars/${{ inputs.environment-to-deply }}.tfvars
+            - run: >
+                tflint
+                --chdir=./modules
+                --format compact
+                --config ${{ github.workspace}}/.tflint.hcl
+                --var-file ${{ github.workspace }}/infra/vars/${{ inputs.environment-to-deply }}.tfvars
+                --recursive
+                --disable-rule=terraform_required_version
+                --disable-rule=terraform_required_providers
+            - uses: hashicorp/setup-terraform@v3
+              with:
+                terraform_version: 1.13.5
+            - run: TF_LOG=${{ runner.debug == 1 && 'DEBUG' || 'OFF'}} terraform fmt -check -recursive ./infra ./modules
+                

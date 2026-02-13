@@ -1,0 +1,27 @@
+name: Deploy Development
+
+#on: pull_request
+
+on:
+  push:
+    branches: [ main ]
+
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'modules/**'
+      - 'infra/**'
+      - 'bots/**'
+      - '.github/workflows/**'
+
+permissions:
+    contents: read
+
+jobs:
+    deploy-dev:
+        concurrency: cicd-${{ github.repository_id }}-deploy-dev
+        uses: ./.github/workflows/deploy-environment.yml
+        with:
+            environment-to-deply: "dev"
+            runs-on: ubuntu-latest
+        secrets: inherit
