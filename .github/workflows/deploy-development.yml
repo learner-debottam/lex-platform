@@ -1,27 +1,62 @@
-name: Deploy Development
-
-#on: pull_request
+name: Deploy Environment
 
 on:
-  push:
-    branches: [ main ]
-
-  pull_request:
-    branches: [ main ]
-    paths:
-      - 'modules/**'
-      - 'infra/**'
-      - 'bots/**'
-      - '.github/workflows/**'
-
-permissions:
-    contents: read
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      aws-region:
+        required: true
+        type: string
+    secrets:
+      aws-role-arn:
+        required: true
 
 jobs:
-    deploy-dev:
-        concurrency: cicd-${{ github.repository_id }}-deploy-dev
-        uses: ./.github/workflows/deploy-environment.yml
+  terraform:
+    name: Terraform ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 30
+
+    permissions:
+      id-token: write        # Required for OIDC
+      contents: read
+
+    defaults:
+      run:
+        working-directory: infra
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 🔐 AWS OIDC Authentication
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-            environment-to-deply: "dev"
-            runs-on: ubuntu-latest
-        secrets: inherit
+          role-to-assume: ${{ secrets.aws-role-arn }}
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.6
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        run: >
+          terraform plan
+          -var-file=vars/${{ inputs.environment }}.tfvars
+          -out=tfplan
+
+      # Only apply on push to main
+      - name: Terraform Apply
+        if: github.event_name == 'push'
+        run: terraform apply -auto-approve tfplan
