@@ -17,7 +17,6 @@ env:
   AWS_REGION: "eu-west-1"
   TF_INPUT: false
   TF_IN_AUTOMATION: true
-  TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
 
 permissions:
   contents: read
@@ -53,9 +52,13 @@ jobs:
           tflint_version: v0.50.3
       - run: tflint --init
       - name: Lint Infra
-        run: tflint --chdir=infra --recursive --format=compact
+        run: |
+          cd infra
+          tflint --recursive --format=compact
       - name: Lint Lex Bot Module
-        run: tflint --chdir=modules/lex-bot --recursive --format=compact
+        run: |
+          cd modules/lex-bot
+          tflint --recursive --format=compact
 
 # ---------------------------------------------------
 # 3️⃣ Terraform Deploy (Matrix for environments)
@@ -91,7 +94,7 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
 
       # -------------------------------
-      # Terraform Init Infra
+      # Terraform Deploy Infra
       # -------------------------------
       - name: Terraform Init Infra
         working-directory: infra
@@ -119,7 +122,7 @@ jobs:
         run: terraform apply -auto-approve tfplan
 
       # -------------------------------
-      # Terraform Init Lex Bot
+      # Terraform Deploy Lex Bot Module
       # -------------------------------
       - name: Terraform Init Lex Bot
         working-directory: modules/lex-bot
