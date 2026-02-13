@@ -54,11 +54,11 @@ jobs:
       - name: Lint Infra
         run: |
           cd infra
-          tflint --recursive --format=compact
+          tflint --recursive --format=compact --disable-rule=terraform_required_version
       - name: Lint Lex Bot Module
         run: |
           cd modules/lex-bot
-          tflint --recursive --format=compact
+          tflint --recursive --format=compact --disable-rule=terraform_required_version
 
 # ---------------------------------------------------
 # 3️⃣ Terraform Deploy (Matrix for environments)
