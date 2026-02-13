@@ -10,6 +10,6 @@ resource "aws_lexv2models_bot_version" "this" {
   depends_on = [
     aws_lexv2models_intent.intents,
     aws_lexv2models_slot.slots,
-    terraform_data.sample_utterances
+  //  terraform_data.sample_utterances
   ]
 }
