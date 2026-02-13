@@ -17,11 +17,19 @@ resource "aws_lexv2models_intent" "intents" {
   name        = each.value.lex_id
   description = each.value.description
 
-  lifecycle {
-    create_before_destroy = false
-    ignore_changes = [sample_utterance]
-  }
+  # lifecycle {
+  #   create_before_destroy = false
+  #   ignore_changes = [sample_utterance]
+  # }
 
+# 🔹 Dynamically create sample utterances
+  dynamic "sample_utterance" {
+    for_each = each.value.sample_utterances
+    content {
+      utterance = sample_utterance.value
+    }
+  }
+  
   depends_on = [
     aws_lexv2models_bot_locale.locales
   ]

@@ -24,8 +24,8 @@ locals {
     //file("${path.module}/../../bots/customer-support/bot.json")
     //file("${path.module}/../../bots/examples/booking-bot.json")
     //file("${path.module}/../../bots/examples/minimal-bot.json")
-    //file("${path.module}/../../bots/examples/pizza-order-bot.json")
-    file("${path.module}/../../bots/examples/restaurant-bot.json")
+    file("${path.module}/../../bots/examples/pizza-order-bot.json")
+    //file("${path.module}/../../bots/examples/restaurant-bot.json")
     //file("${path.module}/../../bots/examples/simple-greeting-bot.json")
   )
 }

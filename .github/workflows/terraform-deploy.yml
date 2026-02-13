@@ -1,6 +1,9 @@
 name: Lex Platform Enterprise CI/CD
 
 on:
+  push:
+    branches: [ main ]
+
   pull_request:
     branches: [ main ]
     paths:
@@ -8,9 +11,6 @@ on:
       - 'environments/**'
       - 'bots/**'
       - '.github/workflows/**'
-
-  push:
-    branches: [ main ]
 
   workflow_dispatch:
     inputs:
@@ -26,16 +26,11 @@ env:
   TF_IN_AUTOMATION: true
   TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
 
-concurrency:
-  group: terraform-${{ github.ref }}
-  cancel-in-progress: true
-
 # ---------------------------------------------------
 # 1️⃣ Security Scan
 # ---------------------------------------------------
 
 jobs:
-
   security-scan:
     name: Terraform Security Scan
     runs-on: ubuntu-latest
@@ -57,42 +52,14 @@ jobs:
           sarif_file: results.sarif
 
 # ---------------------------------------------------
-# 2️⃣ PR Plan (No Apply)
-# ---------------------------------------------------
-
-  terraform-plan:
-    name: Terraform Plan (PR)
-    if: github.event_name == 'pull_request'
-    needs: security-scan
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_DEV }}
-          aws-region: ${{ env.AWS_REGION }}
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-      - working-directory: environments/dev
-        run: terraform init -upgrade
-      - working-directory: environments/dev
-        run: terraform plan -no-color
-
-# ---------------------------------------------------
-# 3️⃣ DEV DEPLOY
+# 2️⃣ Deploy DEV (waits for approval)
 # ---------------------------------------------------
 
   deploy-dev:
     name: Deploy DEV
-    if: github.event_name != 'pull_request'
     needs: security-scan
     runs-on: ubuntu-latest
-    environment: dev
+    environment: dev   # <-- triggers manual approval
     concurrency:
       group: terraform-dev
       cancel-in-progress: false
@@ -109,22 +76,25 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
-      - working-directory: environments/dev
+      - name: Terraform Init
+        working-directory: environments/dev
         run: terraform init -upgrade
-      - working-directory: environments/dev
+      - name: Terraform Plan
+        working-directory: environments/dev
         run: terraform plan -out=tfplan
-      - working-directory: environments/dev
+      - name: Terraform Apply
+        working-directory: environments/dev
         run: terraform apply tfplan
 
 # ---------------------------------------------------
-# 4️⃣ TEST DEPLOY (waits for DEV)
+# 3️⃣ Deploy TEST (waits for DEV approval + completion)
 # ---------------------------------------------------
 
   deploy-test:
     name: Deploy TEST
-    needs: deploy-dev
+    needs: deploy-dev   # <-- waits for DEV to finish
     runs-on: ubuntu-latest
-    environment: test
+    environment: test   # <-- triggers manual approval
     concurrency:
       group: terraform-test
       cancel-in-progress: false
@@ -141,22 +111,25 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
-      - working-directory: environments/test
+      - name: Terraform Init
+        working-directory: environments/test
         run: terraform init -upgrade
-      - working-directory: environments/test
+      - name: Terraform Plan
+        working-directory: environments/test
         run: terraform plan -out=tfplan
-      - working-directory: environments/test
+      - name: Terraform Apply
+        working-directory: environments/test
         run: terraform apply tfplan
 
 # ---------------------------------------------------
-# 5️⃣ SIT DEPLOY (waits for TEST)
+# 4️⃣ Deploy SIT (waits for TEST approval + completion)
 # ---------------------------------------------------
 
   deploy-sit:
     name: Deploy SIT
     needs: deploy-test
     runs-on: ubuntu-latest
-    environment: sit
+    environment: sit   # <-- triggers manual approval
     concurrency:
       group: terraform-sit
       cancel-in-progress: false
@@ -173,22 +146,25 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
-      - working-directory: environments/sit
+      - name: Terraform Init
+        working-directory: environments/sit
         run: terraform init -upgrade
-      - working-directory: environments/sit
+      - name: Terraform Plan
+        working-directory: environments/sit
         run: terraform plan -out=tfplan
-      - working-directory: environments/sit
+      - name: Terraform Apply
+        working-directory: environments/sit
         run: terraform apply tfplan
 
 # ---------------------------------------------------
-# 6️⃣ PROD DEPLOY (waits for SIT)
+# 5️⃣ Deploy PROD (waits for SIT approval + completion)
 # ---------------------------------------------------
 
   deploy-prod:
     name: Deploy PROD
     needs: deploy-sit
     runs-on: ubuntu-latest
-    environment: prod
+    environment: prod   # <-- triggers manual approval
     concurrency:
       group: terraform-prod
       cancel-in-progress: false
@@ -205,9 +181,12 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
-      - working-directory: environments/prod
+      - name: Terraform Init
+        working-directory: environments/prod
         run: terraform init -upgrade
-      - working-directory: environments/prod
+      - name: Terraform Plan
+        working-directory: environments/prod
         run: terraform plan -out=tfplan
-      - working-directory: environments/prod
+      - name: Terraform Apply
+        working-directory: environments/prod
         run: terraform apply tfplan
