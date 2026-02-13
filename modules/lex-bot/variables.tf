@@ -12,7 +12,7 @@ variable "tags" {
   default = {}
 }
 
-variable "locale_id" {
-  type = string
-  default = "en_GB"
-}
+# variable "locale_id" {
+#   type = string
+#   default = "en_GB"
+# }
