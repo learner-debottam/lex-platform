@@ -61,90 +61,99 @@ jobs:
           tflint --recursive --format=compact --disable-rule=terraform_required_version
 
 # ---------------------------------------------------
-# 3️⃣ Terraform Deploy (Matrix for environments)
+# 3️⃣ Deploy DEV
 # ---------------------------------------------------
-  deploy:
-    name: Terraform Deploy
+  deploy-dev:
+    name: Deploy DEV
     needs: tflint
     runs-on: ubuntu-latest
-    concurrency:
-      group: terraform-${{ matrix.environment }}
-      cancel-in-progress: false
-    strategy:
-      matrix:
-        environment: [dev, test, sit, prod]
-    environment: ${{ matrix.environment }}
-
+    environment: dev   # <-- triggers manual approval
     steps:
       - uses: actions/checkout@v4
-
-      # -------------------------------
-      # AWS OIDC Login
-      # -------------------------------
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets[format('aws_role_%s', matrix.environment)] }}
+          role-to-assume: ${{ secrets.aws_role_dev }}
           aws-region: ${{ env.AWS_REGION }}
-
-      # -------------------------------
-      # Terraform Setup
-      # -------------------------------
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
-
-      # -------------------------------
-      # Terraform Deploy Infra
-      # -------------------------------
       - name: Terraform Init Infra
         working-directory: infra
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform init -upgrade -backend-config="state/${{ matrix.environment }}.config"
-
-      - name: Terraform Validate Infra
-        working-directory: infra
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform validate
-
+        run: terraform init -upgrade -backend-config="state/dev.config"
       - name: Terraform Plan Infra
         working-directory: infra
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform plan -var-file=vars/${{ matrix.environment }}.tfvars -out=tfplan
-
+        run: terraform plan -var-file=vars/dev.tfvars -out=tfplan
       - name: Terraform Apply Infra
-        if: github.event_name == 'push'
         working-directory: infra
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
         run: terraform apply -auto-approve tfplan
-
-      # -------------------------------
-      # Terraform Deploy Lex Bot Module
-      # -------------------------------
       - name: Terraform Init Lex Bot
         working-directory: modules/lex-bot
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform init -upgrade -backend-config="state/${{ matrix.environment }}.config"
-
-      - name: Terraform Validate Lex Bot
-        working-directory: modules/lex-bot
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform validate
-
+        run: terraform init -upgrade -backend-config="state/dev.config"
       - name: Terraform Plan Lex Bot
         working-directory: modules/lex-bot
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform plan -var-file=vars/${{ matrix.environment }}.tfvars -out=tfplan
-
+        run: terraform plan -var-file=vars/dev.tfvars -out=tfplan
       - name: Terraform Apply Lex Bot
-        if: github.event_name == 'push'
         working-directory: modules/lex-bot
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
         run: terraform apply -auto-approve tfplan
+
+# ---------------------------------------------------
+# 4️⃣ Deploy TEST (after DEV approval)
+# ---------------------------------------------------
+  deploy-test:
+    name: Deploy TEST
+    needs: deploy-dev
+    runs-on: ubuntu-latest
+    environment: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.aws_role_test }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: Terraform Init Infra
+        working-directory: infra
+        env:
+          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
+        run: terraform init -upgrade -backend-config="state/test.config"
+      - name: Terraform Plan Infra
+        working-directory: infra
+        env:
+          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
+        run: terraform plan -var-file=vars/test.tfvars -out=tfplan
+      - name: Terraform Apply Infra
+        working-directory: infra
+        env:
+          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
+        run: terraform apply -auto-approve tfplan
+      - name: Terraform Init Lex Bot
+        working-directory: modules/lex-bot
+        env:
+          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
+        run: terraform init -upgrade -backend-config="state/test.config"
+      - name: Terraform Plan Lex Bot
+        working-directory: modules/lex-bot
+        env:
+          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
+        run: terraform plan -var-file=vars/test.tfvars -out=tfplan
+      - name: Terraform Apply Lex Bot
+        working-directory: modules/lex-bot
+        env:
+          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
+        run: terraform apply -auto-approve tfplan
+
+# ----------
