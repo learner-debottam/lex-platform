@@ -14,7 +14,7 @@ on:
 
 env:
   TF_VERSION: "1.6.0"
-  AWS_REGION: "eu-west-2"
+  AWS_REGION: "eu-west-1"
   TF_INPUT: false
   TF_IN_AUTOMATION: true
 
@@ -52,13 +52,11 @@ jobs:
           tflint_version: v0.50.3
       - run: tflint --init
       - name: Lint Infra
-        run: |
-          cd infra
-          tflint --recursive --format=compact --disable-rule=terraform_required_version
+        working-directory: infra
+        run: tflint --recursive --format=compact --disable-rule=terraform_required_version
       - name: Lint Lex Bot Module
-        run: |
-          cd modules/lex-bot
-          tflint --recursive --format=compact --disable-rule=terraform_required_version
+        working-directory: modules/lex-bot
+        run: tflint --recursive --format=compact --disable-rule=terraform_required_version
 
 # ---------------------------------------------------
 # 3️⃣ Deploy DEV
@@ -67,13 +65,16 @@ jobs:
     name: Deploy DEV
     needs: tflint
     runs-on: ubuntu-latest
-    environment: dev   # manual approval
+    environment: dev   # triggers manual approval
     steps:
       - uses: actions/checkout@v4
+
+      # AWS Credentials
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.aws_role_dev }}
           aws-region: ${{ env.AWS_REGION }}
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
@@ -88,26 +89,24 @@ jobs:
         working-directory: infra
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        #run: terraform plan -var-file=vars/dev.tfvars -out=tfplan
-        #run: terraform plan -var-file=${{ github.workspace }}/infra/vars/dev.tfvars -out=tfplan
-        run: terraform plan -var-file=/home/runner/work/lex-platform/infra/vars/dev.tfvars -out=tfplan
+        run: terraform plan -var-file=vars/dev.tfvars -out=tfplan
       - name: Terraform Apply Infra
         working-directory: infra
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
         run: terraform apply -auto-approve tfplan
 
-      # Lex Bot Module
+      # Lex Bot
       - name: Terraform Init Lex Bot
         working-directory: modules/lex-bot
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform init -upgrade -backend-config=../../infra/state/dev.config
+        run: terraform init -upgrade -backend-config=../infra/state/dev.config
       - name: Terraform Plan Lex Bot
         working-directory: modules/lex-bot
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform plan -var-file=../../infra/vars/dev.tfvars -out=tfplan
+        run: terraform plan -var-file=../infra/vars/dev.tfvars -out=tfplan
       - name: Terraform Apply Lex Bot
         working-directory: modules/lex-bot
         env:
@@ -149,17 +148,17 @@ jobs:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
         run: terraform apply -auto-approve tfplan
 
-      # Lex Bot Module
+      # Lex Bot
       - name: Terraform Init Lex Bot
         working-directory: modules/lex-bot
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform init -upgrade -backend-config=../../infra/state/test.config
+        run: terraform init -upgrade -backend-config=../infra/state/test.config
       - name: Terraform Plan Lex Bot
         working-directory: modules/lex-bot
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform plan -var-file=../../infra/vars/test.tfvars -out=tfplan
+        run: terraform plan -var-file=../infra/vars/test.tfvars -out=tfplan
       - name: Terraform Apply Lex Bot
         working-directory: modules/lex-bot
         env:
@@ -201,17 +200,17 @@ jobs:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
         run: terraform apply -auto-approve tfplan
 
-      # Lex Bot Module
+      # Lex Bot
       - name: Terraform Init Lex Bot
         working-directory: modules/lex-bot
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform init -upgrade -backend-config=../../infra/state/sit.config
+        run: terraform init -upgrade -backend-config=../infra/state/sit.config
       - name: Terraform Plan Lex Bot
         working-directory: modules/lex-bot
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform plan -var-file=../../infra/vars/sit.tfvars -out=tfplan
+        run: terraform plan -var-file=../infra/vars/sit.tfvars -out=tfplan
       - name: Terraform Apply Lex Bot
         working-directory: modules/lex-bot
         env:
@@ -253,17 +252,17 @@ jobs:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
         run: terraform apply -auto-approve tfplan
 
-      # Lex Bot Module
+      # Lex Bot
       - name: Terraform Init Lex Bot
         working-directory: modules/lex-bot
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform init -upgrade -backend-config=../../infra/state/prod.config
+        run: terraform init -upgrade -backend-config=../infra/state/prod.config
       - name: Terraform Plan Lex Bot
         working-directory: modules/lex-bot
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform plan -var-file=../../infra/vars/prod.tfvars -out=tfplan
+        run: terraform plan -var-file=../infra/vars/prod.tfvars -out=tfplan
       - name: Terraform Apply Lex Bot
         working-directory: modules/lex-bot
         env:
