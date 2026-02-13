@@ -88,7 +88,8 @@ jobs:
         working-directory: infra
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform plan -var-file=vars/dev.tfvars -out=tfplan
+        #run: terraform plan -var-file=vars/dev.tfvars -out=tfplan
+        run: terraform plan -var-file=${{ github.workspace }}/infra/vars/dev.tfvars -out=tfplan
       - name: Terraform Apply Infra
         working-directory: infra
         env:
