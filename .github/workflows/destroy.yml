@@ -1,0 +1,99 @@
+name: Destroy Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to destroy"
+        required: true
+        type: choice
+        options:
+          - dev
+          - test
+          - sit
+          - prod
+
+      confirm:
+        description: "Type DESTROY to confirm"
+        required: true
+
+env:
+  TF_VERSION: "1.6.0"
+  AWS_REGION: "eu-west-2"
+  TF_INPUT: false
+  TF_IN_AUTOMATION: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  destroy:
+    if: github.event.inputs.confirm == 'DESTROY'
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      ########################################################
+      # Resolve AWS Role
+      ########################################################
+      - name: Set AWS Role
+        id: role
+        run: |
+          echo "role=aws_role_${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+
+      ########################################################
+      # AWS AUTH
+      ########################################################
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets[steps.role.outputs.role] }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      ########################################################
+      # Terraform Setup
+      ########################################################
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      ########################################################
+      # DESTROY BOT FIRST (dependency safety)
+      ########################################################
+      - name: Init Bot
+        working-directory: bot
+        run: terraform init
+
+      - name: Plan Destroy Bot
+        working-directory: bot
+        run: |
+          terraform plan -destroy \
+            -var-file=../infra/vars/${{ github.event.inputs.environment }}.tfvars \
+            -out=tfplan-destroy-bot
+
+      - name: Destroy Bot
+        working-directory: bot
+        run: terraform apply tfplan-destroy-bot
+
+      ########################################################
+      # DESTROY INFRA
+      ########################################################
+      - name: Init Infra
+        working-directory: infra
+        run: |
+          terraform init -upgrade \
+            -backend-config=state/${{ github.event.inputs.environment }}.config
+
+      - name: Plan Destroy Infra
+        working-directory: infra
+        run: |
+          terraform plan -destroy \
+            -var-file=vars/${{ github.event.inputs.environment }}.tfvars \
+            -out=tfplan-destroy-infra
+
+      - name: Destroy Infra
+        working-directory: infra
+        run: terraform apply tfplan-destroy-infra
