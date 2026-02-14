@@ -3,18 +3,8 @@ name: Lex Platform Enterprise CI/CD
 on:
   push:
     branches: [ main ]
-
   workflow_dispatch:
     inputs:
-      environment:
-        description: "Environment to deploy"
-        required: true
-        type: choice
-        options:
-          - dev
-          - test
-          - sit
-          - prod
       debug:
         description: "Enable Terraform DEBUG logging"
         required: false
@@ -63,47 +53,22 @@ jobs:
         run: tflint --recursive --disable-rule=terraform_required_version
 
 ############################################################
-# 3. DEPLOY
+# TEMPLATE DEPLOY JOB
 ############################################################
-  deploy:
+  deploy-dev:
+    name: Deploy DEV
     needs: tflint
     runs-on: ubuntu-latest
-
-    # DEV auto on push
-    # Others only manual
-    if: |
-      github.event_name == 'push' ||
-      github.event.inputs.environment != ''
-
-    environment: ${{ github.event.inputs.environment || 'dev' }}
+    environment: dev
 
     steps:
       - uses: actions/checkout@v4
 
-      ########################################
-      # Resolve Environment
-      ########################################
-      - name: Set Environment Variables
-        id: env
-        run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            echo "env_name=dev" >> $GITHUB_OUTPUT
-          else
-            echo "env_name=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
-          fi
-
-      ########################################
-      # AWS AUTH
-      ########################################
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets['aws_role_' + steps.env.outputs.env_name] }}
+          role-to-assume: ${{ secrets.aws_role_dev }}
           aws-region: ${{ env.AWS_REGION }}
 
-      ########################################
-      # Terraform Setup
-      ########################################
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
@@ -115,20 +80,15 @@ jobs:
         working-directory: infra
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: |
-          terraform init -upgrade \
-            -backend-config=state/${{ steps.env.outputs.env_name }}.config
+        run: terraform init -upgrade -backend-config=state/dev.config
 
       - name: Plan Infra
         working-directory: infra
-        run: |
-          terraform plan \
-            -var-file=vars/${{ steps.env.outputs.env_name }}.tfvars \
-            -out=tfplan-infra
+        run: terraform plan -var-file=vars/dev.tfvars -out=tfplan
 
       - name: Apply Infra
         working-directory: infra
-        run: terraform apply -auto-approve tfplan-infra
+        run: terraform apply -auto-approve tfplan
 
       ########################################
       # BOT (ROOT MODULE)
@@ -141,11 +101,103 @@ jobs:
 
       - name: Plan Bot
         working-directory: bot
-        run: |
-          terraform plan \
-            -var-file=../infra/vars/${{ steps.env.outputs.env_name }}.tfvars \
-            -out=tfplan-bot
+        run: terraform plan -var-file=../infra/vars/dev.tfvars -out=tfplan
 
       - name: Apply Bot
         working-directory: bot
-        run: terraform apply -auto-approve tfplan-bot
+        run: terraform apply -auto-approve tfplan
+
+############################################################
+# TEST
+############################################################
+  deploy-test:
+    name: Deploy TEST
+    needs: deploy-dev
+    runs-on: ubuntu-latest
+    environment: test
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.aws_role_test }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Infra
+        working-directory: infra
+        run: |
+          terraform init -upgrade -backend-config=state/test.config
+          terraform plan -var-file=vars/test.tfvars -out=tfplan
+          terraform apply -auto-approve tfplan
+
+      - name: Bot
+        working-directory: bot
+        run: |
+          terraform init
+          terraform plan -var-file=../infra/vars/test.tfvars -out=tfplan
+          terraform apply -auto-approve tfplan
+
+############################################################
+# SIT
+############################################################
+  deploy-sit:
+    name: Deploy SIT
+    needs: deploy-test
+    runs-on: ubuntu-latest
+    environment: sit
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.aws_role_sit }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Infra + Bot
+        run: |
+          cd infra
+          terraform init -upgrade -backend-config=state/sit.config
+          terraform plan -var-file=vars/sit.tfvars -out=tfplan
+          terraform apply -auto-approve tfplan
+
+          cd ../bot
+          terraform init
+          terraform plan -var-file=../infra/vars/sit.tfvars -out=tfplan
+          terraform apply -auto-approve tfplan
+
+############################################################
+# PROD
+############################################################
+  deploy-prod:
+    name: Deploy PROD
+    needs: deploy-sit
+    runs-on: ubuntu-latest
+    environment: prod
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.aws_role_prod }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Infra + Bot
+        run: |
+          cd infra
+          terraform init -upgrade -backend-config=state/prod.config
+          terraform plan -var-file=vars/prod.tfvars -out=tfplan
+          terraform apply -auto-approve tfplan
+
+          cd ../bot
+          terraform init
+          terraform plan -var-file=../infra/vars/prod.tfvars -out=tfplan
+          terraform apply -auto-approve tfplan
