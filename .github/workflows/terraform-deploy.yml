@@ -3,8 +3,6 @@ name: Lex Platform Enterprise CI/CD
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
     inputs:
       debug:
@@ -23,53 +21,49 @@ permissions:
   id-token: write
   security-events: write
 
-# ---------------------------------------------------
-# 1️⃣ Security Scan
-# ---------------------------------------------------
+############################################################
+# 1. SECURITY SCAN
+############################################################
 jobs:
   security-scan:
-    name: Terraform Security Scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: pip install checkov
-      - run: checkov -d . --framework terraform --soft-fail -o sarif --output-file-path results.sarif
-      - uses: github/codeql-action/upload-sarif@v4
-        with:
-          sarif_file: results.sarif
+      - run: checkov -d . --framework terraform --soft-fail
 
-# ---------------------------------------------------
-# 2️⃣ Terraform Lint (TFLint)
-# ---------------------------------------------------
+############################################################
+# 2. LINT
+############################################################
   tflint:
-    name: Terraform Lint
-    runs-on: ubuntu-latest
     needs: security-scan
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: terraform-linters/setup-tflint@v6
-        with:
-          tflint_version: v0.50.3
       - run: tflint --init
+
       - name: Lint Infra
         working-directory: infra
-        run: tflint --recursive --format=compact --disable-rule=terraform_required_version
-      - name: Lint Lex Bot Module
-        working-directory: modules/lex-bot
-        run: tflint --recursive --format=compact --disable-rule=terraform_required_version
+        run: tflint --recursive --disable-rule=terraform_required_version
 
-# ---------------------------------------------------
-# 3️⃣ Deploy DEV
-# ---------------------------------------------------
+      - name: Lint Bot Root Module
+        working-directory: bot
+        run: tflint --recursive --disable-rule=terraform_required_version
+
+############################################################
+# TEMPLATE DEPLOY JOB
+############################################################
   deploy-dev:
     name: Deploy DEV
     needs: tflint
     runs-on: ubuntu-latest
-    environment: dev   # triggers manual approval
+    environment: dev
+
     steps:
       - uses: actions/checkout@v4
 
-      # AWS Credentials
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.aws_role_dev }}
@@ -79,50 +73,49 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      # Infra
-      - name: Terraform Init Infra
+      ########################################
+      # INFRA
+      ########################################
+      - name: Init Infra
         working-directory: infra
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
         run: terraform init -upgrade -backend-config=state/dev.config
-      - name: Terraform Plan Infra
+
+      - name: Plan Infra
         working-directory: infra
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        #run: terraform plan -var-file=vars/dev.tfvars -out=tfplan
-        run: terraform plan -var-file=${{ github.workspace }}/infra/vars/dev.tfvars -out=tfplan
-      - name: Terraform Apply Infra
+        run: terraform plan -var-file=vars/dev.tfvars -out=tfplan
+
+      - name: Apply Infra
         working-directory: infra
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
         run: terraform apply -auto-approve tfplan
 
-      # Lex Bot
-      - name: Terraform Init Lex Bot
-        working-directory: modules/lex-bot
+      ########################################
+      # BOT (ROOT MODULE)
+      ########################################
+      - name: Init Bot
+        working-directory: bot
         env:
           TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform init -upgrade -backend-config=../infra/state/dev.config
-      - name: Terraform Plan Lex Bot
-        working-directory: modules/lex-bot
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        #run: terraform plan -var-file=../../infra/vars/dev.tfvars -out=tfplan
-        run: terraform plan -var-file=${{ github.workspace }}/infra/vars/dev.tfvars -out=tfplan
-      - name: Terraform Apply Lex Bot
-        working-directory: modules/lex-bot
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
+        run: terraform init
+
+      - name: Plan Bot
+        working-directory: bot
+        run: terraform plan -var-file=../infra/vars/dev.tfvars -out=tfplan
+
+      - name: Apply Bot
+        working-directory: bot
         run: terraform apply -auto-approve tfplan
 
-# ---------------------------------------------------
-# 4️⃣ Deploy TEST
-# ---------------------------------------------------
+############################################################
+# TEST
+############################################################
   deploy-test:
     name: Deploy TEST
     needs: deploy-dev
     runs-on: ubuntu-latest
     environment: test
+
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
@@ -133,48 +126,29 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      # Infra
-      - name: Terraform Init Infra
+      - name: Infra
         working-directory: infra
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform init -upgrade -backend-config=state/test.config
-      - name: Terraform Plan Infra
-        working-directory: infra
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform plan -var-file=vars/test.tfvars -out=tfplan
-      - name: Terraform Apply Infra
-        working-directory: infra
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform apply -auto-approve tfplan
+        run: |
+          terraform init -upgrade -backend-config=state/test.config
+          terraform plan -var-file=vars/test.tfvars -out=tfplan
+          terraform apply -auto-approve tfplan
 
-      # Lex Bot
-      - name: Terraform Init Lex Bot
-        working-directory: modules/lex-bot
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform init -upgrade -backend-config=../infra/state/test.config
-      - name: Terraform Plan Lex Bot
-        working-directory: modules/lex-bot
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform plan -var-file=../infra/vars/test.tfvars -out=tfplan
-      - name: Terraform Apply Lex Bot
-        working-directory: modules/lex-bot
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform apply -auto-approve tfplan
+      - name: Bot
+        working-directory: bot
+        run: |
+          terraform init
+          terraform plan -var-file=../infra/vars/test.tfvars -out=tfplan
+          terraform apply -auto-approve tfplan
 
-# ---------------------------------------------------
-# 5️⃣ Deploy SIT
-# ---------------------------------------------------
+############################################################
+# SIT
+############################################################
   deploy-sit:
     name: Deploy SIT
     needs: deploy-test
     runs-on: ubuntu-latest
     environment: sit
+
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
@@ -185,48 +159,27 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      # Infra
-      - name: Terraform Init Infra
-        working-directory: infra
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform init -upgrade -backend-config=state/sit.config
-      - name: Terraform Plan Infra
-        working-directory: infra
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform plan -var-file=vars/sit.tfvars -out=tfplan
-      - name: Terraform Apply Infra
-        working-directory: infra
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform apply -auto-approve tfplan
+      - name: Infra + Bot
+        run: |
+          cd infra
+          terraform init -upgrade -backend-config=state/sit.config
+          terraform plan -var-file=vars/sit.tfvars -out=tfplan
+          terraform apply -auto-approve tfplan
 
-      # Lex Bot
-      - name: Terraform Init Lex Bot
-        working-directory: modules/lex-bot
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform init -upgrade -backend-config=../infra/state/sit.config
-      - name: Terraform Plan Lex Bot
-        working-directory: modules/lex-bot
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform plan -var-file=../infra/vars/sit.tfvars -out=tfplan
-      - name: Terraform Apply Lex Bot
-        working-directory: modules/lex-bot
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform apply -auto-approve tfplan
+          cd ../bot
+          terraform init
+          terraform plan -var-file=../infra/vars/sit.tfvars -out=tfplan
+          terraform apply -auto-approve tfplan
 
-# ---------------------------------------------------
-# 6️⃣ Deploy PROD
-# ---------------------------------------------------
+############################################################
+# PROD
+############################################################
   deploy-prod:
     name: Deploy PROD
     needs: deploy-sit
     runs-on: ubuntu-latest
     environment: prod
+
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
@@ -237,36 +190,14 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      # Infra
-      - name: Terraform Init Infra
-        working-directory: infra
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform init -upgrade -backend-config=state/prod.config
-      - name: Terraform Plan Infra
-        working-directory: infra
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform plan -var-file=vars/prod.tfvars -out=tfplan
-      - name: Terraform Apply Infra
-        working-directory: infra
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform apply -auto-approve tfplan
+      - name: Infra + Bot
+        run: |
+          cd infra
+          terraform init -upgrade -backend-config=state/prod.config
+          terraform plan -var-file=vars/prod.tfvars -out=tfplan
+          terraform apply -auto-approve tfplan
 
-      # Lex Bot
-      - name: Terraform Init Lex Bot
-        working-directory: modules/lex-bot
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform init -upgrade -backend-config=../infra/state/prod.config
-      - name: Terraform Plan Lex Bot
-        working-directory: modules/lex-bot
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform plan -var-file=../infra/vars/prod.tfvars -out=tfplan
-      - name: Terraform Apply Lex Bot
-        working-directory: modules/lex-bot
-        env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform apply -auto-approve tfplan
+          cd ../bot
+          terraform init
+          terraform plan -var-file=../infra/vars/prod.tfvars -out=tfplan
+          terraform apply -auto-approve tfplan
