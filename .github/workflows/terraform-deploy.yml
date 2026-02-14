@@ -1,14 +1,24 @@
-name: Lex Platform Enterprise CI/CD
+name: Terraform Deploy
 
 on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+  workflow_call:
     inputs:
+      environment:
+        required: true
+        type: string
       debug:
-        description: "Enable Terraform DEBUG logging"
         required: false
-        default: "false"
+        type: string
+
+    secrets:
+      aws_role_dev:
+        required: false
+      aws_role_test:
+        required: false
+      aws_role_sit:
+        required: false
+      aws_role_prod:
+        required: false
 
 env:
   TF_VERSION: "1.6.0"
@@ -16,188 +26,76 @@ env:
   TF_INPUT: false
   TF_IN_AUTOMATION: true
 
-permissions:
-  contents: read
-  id-token: write
-  security-events: write
-
-############################################################
-# 1. SECURITY SCAN
-############################################################
 jobs:
-  security-scan:
+  deploy:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: pip install checkov
-      - run: checkov -d . --framework terraform --soft-fail
-
-############################################################
-# 2. LINT
-############################################################
-  tflint:
-    needs: security-scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: terraform-linters/setup-tflint@v6
-      - run: tflint --init
-
-      - name: Lint Infra
-        working-directory: infra
-        run: tflint --recursive --disable-rule=terraform_required_version
-
-      - name: Lint Bot Root Module
-        working-directory: bot
-        run: tflint --recursive --disable-rule=terraform_required_version
-
-############################################################
-# TEMPLATE DEPLOY JOB
-############################################################
-  deploy-dev:
-    name: Deploy DEV
-    needs: tflint
-    runs-on: ubuntu-latest
-    environment: dev
+    environment: ${{ inputs.environment }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      ########################################################
+      # Resolve AWS Role Dynamically
+      ########################################################
+      - name: Set AWS Role
+        id: role
+        run: |
+          echo "role=aws_role_${{ inputs.environment }}" >> $GITHUB_OUTPUT
+
+      ########################################################
+      # AWS AUTH
+      ########################################################
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.aws_role_dev }}
+          role-to-assume: ${{ secrets[steps.role.outputs.role] }}
           aws-region: ${{ env.AWS_REGION }}
 
+      ########################################################
+      # Terraform Setup
+      ########################################################
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      ########################################
+      ########################################################
       # INFRA
-      ########################################
+      ########################################################
       - name: Init Infra
         working-directory: infra
         env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
-        run: terraform init -upgrade -backend-config=state/dev.config
+          TF_LOG: ${{ inputs.debug == 'true' && 'DEBUG' || '' }}
+        run: |
+          terraform init -upgrade \
+            -backend-config=state/${{ inputs.environment }}.config
 
       - name: Plan Infra
         working-directory: infra
-        run: terraform plan -var-file=vars/dev.tfvars -out=tfplan
+        run: |
+          terraform plan \
+            -var-file=vars/${{ inputs.environment }}.tfvars \
+            -out=tfplan-infra
 
       - name: Apply Infra
         working-directory: infra
-        run: terraform apply -auto-approve tfplan
+        run: terraform apply -auto-approve tfplan-infra
 
-      ########################################
-      # BOT (ROOT MODULE)
-      ########################################
+      ########################################################
+      # BOT
+      ########################################################
       - name: Init Bot
         working-directory: bot
         env:
-          TF_LOG: ${{ github.event.inputs.debug == 'true' && 'DEBUG' || '' }}
+          TF_LOG: ${{ inputs.debug == 'true' && 'DEBUG' || '' }}
         run: terraform init
 
       - name: Plan Bot
         working-directory: bot
-        run: terraform plan -var-file=../infra/vars/dev.tfvars -out=tfplan
+        run: |
+          terraform plan \
+            -var-file=../infra/vars/${{ inputs.environment }}.tfvars \
+            -out=tfplan-bot
 
       - name: Apply Bot
         working-directory: bot
-        run: terraform apply -auto-approve tfplan
-
-############################################################
-# TEST
-############################################################
-  deploy-test:
-    name: Deploy TEST
-    needs: deploy-dev
-    runs-on: ubuntu-latest
-    environment: test
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.aws_role_test }}
-          aws-region: ${{ env.AWS_REGION }}
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Infra
-        working-directory: infra
-        run: |
-          terraform init -upgrade -backend-config=state/test.config
-          terraform plan -var-file=vars/test.tfvars -out=tfplan
-          terraform apply -auto-approve tfplan
-
-      - name: Bot
-        working-directory: bot
-        run: |
-          terraform init
-          terraform plan -var-file=../infra/vars/test.tfvars -out=tfplan
-          terraform apply -auto-approve tfplan
-
-############################################################
-# SIT
-############################################################
-  deploy-sit:
-    name: Deploy SIT
-    needs: deploy-test
-    runs-on: ubuntu-latest
-    environment: sit
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.aws_role_sit }}
-          aws-region: ${{ env.AWS_REGION }}
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Infra + Bot
-        run: |
-          cd infra
-          terraform init -upgrade -backend-config=state/sit.config
-          terraform plan -var-file=vars/sit.tfvars -out=tfplan
-          terraform apply -auto-approve tfplan
-
-          cd ../bot
-          terraform init
-          terraform plan -var-file=../infra/vars/sit.tfvars -out=tfplan
-          terraform apply -auto-approve tfplan
-
-############################################################
-# PROD
-############################################################
-  deploy-prod:
-    name: Deploy PROD
-    needs: deploy-sit
-    runs-on: ubuntu-latest
-    environment: prod
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.aws_role_prod }}
-          aws-region: ${{ env.AWS_REGION }}
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Infra + Bot
-        run: |
-          cd infra
-          terraform init -upgrade -backend-config=state/prod.config
-          terraform plan -var-file=vars/prod.tfvars -out=tfplan
-          terraform apply -auto-approve tfplan
-
-          cd ../bot
-          terraform init
-          terraform plan -var-file=../infra/vars/prod.tfvars -out=tfplan
-          terraform apply -auto-approve tfplan
+        run: terraform apply -auto-approve tfplan-bot

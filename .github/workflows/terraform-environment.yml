@@ -1,0 +1,85 @@
+name: Lex Platform Enterprise CI/CD
+
+on:
+  push:
+    branches: [ main ]
+
+  workflow_dispatch:
+    inputs:
+      debug:
+        description: "Enable Terraform DEBUG logging"
+        required: false
+        default: "false"
+
+env:
+  TF_VERSION: "1.6.0"
+  AWS_REGION: "eu-west-2"
+  TF_INPUT: false
+  TF_IN_AUTOMATION: true
+
+permissions:
+  contents: read
+  id-token: write
+  security-events: write
+
+############################################################
+# 1️⃣ SECURITY SCAN
+############################################################
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install checkov
+      - run: checkov -d . --framework terraform --soft-fail
+
+############################################################
+# 2️⃣ LINT
+############################################################
+  tflint:
+    needs: security-scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: terraform-linters/setup-tflint@v6
+      - run: tflint --init
+      - run: tflint --recursive --disable-rule=terraform_required_version
+
+############################################################
+# 3️⃣ REUSABLE DEPLOY TEMPLATE
+############################################################
+  deploy-dev:
+    name: Deploy DEV
+    needs: tflint
+    uses: ./.github/workflows/terraform-deploy.yml
+    with:
+      environment: dev
+      debug: ${{ github.event.inputs.debug }}
+    secrets: inherit
+
+  deploy-test:
+    name: Deploy TEST
+    needs: deploy-dev
+    uses: ./.github/workflows/terraform-deploy.yml
+    with:
+      environment: test
+      debug: ${{ github.event.inputs.debug }}
+    secrets: inherit
+
+  deploy-sit:
+    name: Deploy SIT
+    needs: deploy-test
+    uses: ./.github/workflows/terraform-deploy.yml
+    with:
+      environment: sit
+      debug: ${{ github.event.inputs.debug }}
+    secrets: inherit
+
+  deploy-prod:
+    name: Deploy PROD
+    needs: deploy-sit
+    uses: ./.github/workflows/terraform-deploy.yml
+    with:
+      environment: prod
+      debug: ${{ github.event.inputs.debug }}
+    secrets: inherit
