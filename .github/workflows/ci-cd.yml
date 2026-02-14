@@ -4,12 +4,7 @@ on:
   push:
     branches: [ main ]
 
-  workflow_dispatch:
-    inputs:
-      debug:
-        description: "Enable Terraform DEBUG logging"
-        required: false
-        default: "false"
+  pull_request:   # PR from ANY branch
 
 env:
   TF_VERSION: "1.6.0"
@@ -46,40 +41,49 @@ jobs:
       - run: tflint --recursive --disable-rule=terraform_required_version
 
 ############################################################
-# 3️⃣ REUSABLE DEPLOY TEMPLATE
+# 3️⃣ DEV (PR + PUSH)
 ############################################################
   deploy-dev:
     name: Deploy DEV
     needs: tflint
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     uses: ./.github/workflows/terraform-deploy.yml
     with:
       environment: dev
-      debug: ${{ github.event.inputs.debug }}
     secrets: inherit
 
+############################################################
+# 4️⃣ TEST (ONLY PUSH TO MAIN)
+############################################################
   deploy-test:
     name: Deploy TEST
     needs: deploy-dev
+    if: github.event_name == 'push'
     uses: ./.github/workflows/terraform-deploy.yml
     with:
       environment: test
-      debug: ${{ github.event.inputs.debug }}
     secrets: inherit
 
+############################################################
+# 5️⃣ SIT (ONLY PUSH TO MAIN)
+############################################################
   deploy-sit:
     name: Deploy SIT
     needs: deploy-test
+    if: github.event_name == 'push'
     uses: ./.github/workflows/terraform-deploy.yml
     with:
       environment: sit
-      debug: ${{ github.event.inputs.debug }}
     secrets: inherit
 
+############################################################
+# 6️⃣ PROD (ONLY PUSH TO MAIN)
+############################################################
   deploy-prod:
     name: Deploy PROD
     needs: deploy-sit
+    if: github.event_name == 'push'
     uses: ./.github/workflows/terraform-deploy.yml
     with:
       environment: prod
-      debug: ${{ github.event.inputs.debug }}
     secrets: inherit
