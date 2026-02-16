@@ -3,13 +3,11 @@ locals {
     file("${path.module}/examples/minimal-bot.json")
   )
   tags ={
-    Application = "My-Bot"
     ManagedBy ="Terraform"
     Evironment = var.environment
-    environment = "dev"
-    aws_region = var.aws_region
-    aws_account_name = var.aws_account_name
-    aws_account_id = var.aws_account_id
+    AWS_REGION = var.aws_region
+    AWS_ACCOUNT_NAME = var.aws_account_name
+    AWS_ACCOUNT_ID = var.aws_account_id
   }
   
 }
