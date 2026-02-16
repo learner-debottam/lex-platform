@@ -4,19 +4,22 @@
 # Creates an IAM role that allows AWS Lex service to perform actions on behalf
 # of the bot. This role is required for the bot to function.
 
+data "aws_iam_policy_document" "lex_trust_relationship" {
+  statement {
+    effect = "Allow"
+    principals {
+      type = "Service"
+      identifiers ="lexv2.amazonaws.com"
+    }
+    actions = ["sts:AssumeRole"]
+  }
+}
+
 resource "aws_iam_role" "lex_role" {
   name = "${local.bot_name}-lex-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "lexv2.amazonaws.com"
-      }
-      Action = "sts:AssumeRole"
-    }]
-  })
+  assume_role_policy = data.aws_iam_policy_document.lex_trust_relationship.json
+  tags = var.tags
+  max_session_duration = 43200
 }
 
 # ============================================================================
