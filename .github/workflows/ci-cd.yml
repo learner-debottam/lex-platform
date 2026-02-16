@@ -55,35 +55,35 @@ jobs:
 ############################################################
 # 4️⃣ TEST (ONLY PUSH TO MAIN)
 ############################################################
-  deploy-test:
-    name: Deploy TEST
-    needs: deploy-dev
-    if: github.event_name == 'push'
-    uses: ./.github/workflows/terraform-deploy.yml
-    with:
-      environment: test
-    secrets: inherit
+  # deploy-test:
+  #   name: Deploy TEST
+  #   needs: deploy-dev
+  #   if: github.event_name == 'push'
+  #   uses: ./.github/workflows/terraform-deploy.yml
+  #   with:
+  #     environment: test
+  #   secrets: inherit
 
 ############################################################
 # 5️⃣ SIT (ONLY PUSH TO MAIN)
 ############################################################
-  deploy-sit:
-    name: Deploy SIT
-    needs: deploy-test
-    if: github.event_name == 'push'
-    uses: ./.github/workflows/terraform-deploy.yml
-    with:
-      environment: sit
-    secrets: inherit
+  # deploy-sit:
+  #   name: Deploy SIT
+  #   needs: deploy-test
+  #   if: github.event_name == 'push'
+  #   uses: ./.github/workflows/terraform-deploy.yml
+  #   with:
+  #     environment: sit
+  #   secrets: inherit
 
 ############################################################
 # 6️⃣ PROD (ONLY PUSH TO MAIN)
 ############################################################
-  deploy-prod:
-    name: Deploy PROD
-    needs: deploy-sit
-    if: github.event_name == 'push'
-    uses: ./.github/workflows/terraform-deploy.yml
-    with:
-      environment: prod
-    secrets: inherit
+  # deploy-prod:
+  #   name: Deploy PROD
+  #   needs: deploy-sit
+  #   if: github.event_name == 'push'
+  #   uses: ./.github/workflows/terraform-deploy.yml
+  #   with:
+  #     environment: prod
+  #   secrets: inherit
