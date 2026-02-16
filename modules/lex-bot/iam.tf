@@ -25,7 +25,81 @@ resource "aws_iam_role" "lex_role" {
 # Attaches the AWS managed policy for Lex full access to the bot's IAM role.
 # This provides necessary permissions for bot operations.
 
-resource "aws_iam_role_policy_attachment" "lex_basic" {
-  role       = aws_iam_role.lex_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonLexFullAccess"
+# resource "aws_iam_role_policy_attachment" "lex_basic" {
+#   role       = aws_iam_role.lex_role.name
+#   policy_arn = "arn:aws:iam::aws:policy/AmazonLexFullAccess"
+# }
+
+data "aws_iam_policy_document" "allow_synthesize_speech"{
+  statement {
+    sid = "LexActions"
+    effect = "Allow"
+    actions = [
+      "polly: SynthesizeSpeech"
+    ]
+    resources = [ 
+      "arn:aws:polly:${var.aws_region}:${var.aws_account_id}:lexicon/*"
+    ]
+ }
 }
+
+resource "aws_iam_policy" "allow_synthesize_speech" {
+  name = "${local.bot_name}-allow-synthesize-speech-policy"
+  policy = data.aws_iam_policy_document.allow_synthesize_speech.json
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "allow_synthesize_speech" {
+  role       = aws_iam_role.lex_role.name
+  policy_arn = aws_iam_policy.allow_synthesize_speech.arn
+}
+
+data "aws_iam_policy_document" "allow_lex_cloudwatch_logging"{
+  statement {
+    sid = "AllowLexCloudWatchLogging"
+    effect = "Allow"
+    actions = [
+      "logs: CreateLogStream",
+      "logs: PutLogEvents",
+      "logs: CreateLogGroup"
+    ]
+    resources = [ 
+      "arn:aws:logs:${var.aws_region}:${var.aws_account_id}:log-group:/aws/lex/*"
+    ]
+ }
+}
+
+resource "aws_iam_policy" "allow_lex_cloudwatch_logging" {
+  name = "${local.bot_name}-allow-lex-cloudwatch-logging-policy"
+  policy = data.aws_iam_policy_document.allow_lex_cloudwatch_logging.json
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "allow_lex_cloudwatch_logging" {
+  role       = aws_iam_role.lex_role.name
+  policy_arn = aws_iam_policy.allow_lex_cloudwatch_logging.arn
+}
+
+# data "aws_iam_policy_document" "allow_invoke_lambda_function"{
+#   statement {
+#     sid = "AllowLexCloudWatchLogging"
+#     effect = "Allow"
+#     actions = [
+#       "lambda: InvokeFunction"
+#     ]
+#     resources = [ 
+#       "arn:aws:lambda:${var.aws_region}:${var.aws_account_id}:log-group:/aws/lex/*"
+#     ]
+#  }
+# }
+
+# resource "aws_iam_policy" "allow_invoke_lambda_function" {
+#   name = "${local.bot_name}-allow-invoke-lambda-function-policy"
+#   policy = data.aws_iam_policy_document.allow_invoke_lambda_function.json
+#   tags = local.tags
+# }
+
+# resource "aws_iam_role_policy_attachment" "allow_invoke_lambda_function" {
+#   role       = aws_iam_role.lex_role.name
+#   policy_arn = aws_iam_policy.allow_invoke_lambda_function.arn
+# }
