@@ -28,31 +28,28 @@ jobs:
     environment: ${{ inputs.environment }}
 
     steps:
-      # ---------------------------
-      # Checkout repository
-      # ---------------------------
       - uses: actions/checkout@v4
 
-      # ---------------------------
-      # Resolve AWS Role dynamically
-      # ---------------------------
+      ########################################################
+      # Resolve AWS Role Dynamically
+      ########################################################
       - name: Set AWS Role
         id: role
         run: |
           echo "role=aws_role_${{ inputs.environment }}" >> $GITHUB_OUTPUT
 
-      # ---------------------------
-      # Configure AWS credentials
-      # ---------------------------
+      ########################################################
+      # AWS AUTH
+      ########################################################
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets[steps.role.outputs.role] }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # ---------------------------
+      ########################################################
       # Terraform Setup
-      # ---------------------------
+      ########################################################
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
@@ -63,11 +60,15 @@ jobs:
       - name: Init Infra
         working-directory: infra
         run: |
-          terraform init -upgrade -backend-config=state/${{ inputs.environment }}.config
+          terraform init -upgrade \
+            -backend-config=state/${{ inputs.environment }}.config
 
       - name: Plan Infra
         working-directory: infra
-        run: terraform plan -out=tfplan-infra
+        run: |
+          terraform plan \
+            -var-file=vars/${{ inputs.environment }}.tfvars \
+            -out=tfplan-infra
 
       - name: Apply Infra
         working-directory: infra
@@ -78,14 +79,13 @@ jobs:
       ########################################################
       - name: Init Bot
         working-directory: bot
-        run: |
-          terraform init -upgrade -reconfigure -backend-config=state/${{ inputs.environment }}.config
+        run: terraform init
 
       - name: Plan Bot
         working-directory: bot
         run: |
           terraform plan \
-            -var-file=vars/${{ inputs.environment }}.tfvars \
+            -var-file=../infra/vars/${{ inputs.environment }}.tfvars \
             -out=tfplan-bot
 
       - name: Apply Bot
