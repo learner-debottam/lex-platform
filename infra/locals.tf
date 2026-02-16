@@ -1,7 +1,7 @@
-locals {
-  tags ={
-    Application = "My-Bot"
-    ManagedBy ="Terraform"
-    Evironment = var.environment
-  }
-}
+# locals {
+#   tags ={
+#     Application = "My-Bot"
+#     ManagedBy ="Terraform"
+#     Evironment = var.environment
+#   }
+# }
