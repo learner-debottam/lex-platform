@@ -67,7 +67,6 @@ jobs:
         working-directory: infra
         run: |
           terraform plan \
-            -var-file=../bot/vars/${{ inputs.environment }}.tfvars \
             -out=tfplan-infra
 
       - name: Apply Infra
