@@ -9,7 +9,7 @@ data "aws_iam_policy_document" "lex_trust_relationship" {
     effect = "Allow"
     principals {
       type = "Service"
-      identifiers ="lexv2.amazonaws.com"
+      identifiers = ["lexv2.amazonaws.com"]
     }
     actions = ["sts:AssumeRole"]
   }
